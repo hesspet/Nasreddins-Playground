@@ -1,3 +1,5 @@
+# Graphify exclusion rules (gitignore syntax, last-match-wins over .gitignore)
+wwwroot/models/
 /.vs
 bin
 obj
