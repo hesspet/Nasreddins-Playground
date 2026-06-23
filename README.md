@@ -1,2 +1,4 @@
 # NasreddinsPlayground
-Nasreddins Playground to evaluate neu ideas and wired stuff - Enter at you own risk.
+Nasreddins Playground to evaluate new ideas and wired stuff - Enter at you own risk.
+
+Point. Everything said about this repository. :-) 
