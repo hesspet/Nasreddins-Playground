@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TestSherpa.Tests/TestSherpa.Tests.csproj" />
+  <Project Path="TestSherpa/TestSherpa.csproj" />
+</Solution>

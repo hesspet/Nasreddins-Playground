@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>0.10.0</Version>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.9" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ServiceWorker Include="wwwroot\service-worker.js" PublishedContent="wwwroot\service-worker.published.js" />
+  </ItemGroup>
+
+  <Target Name="EnsureSherpaAssets" BeforeTargets="BeforeBuild;BeforePublish">
+    <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\Tools\Install-SherpaAssets.ps1&quot;" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <Target Name="BuildJs" BeforeTargets="BeforeBuild" Inputs="js-src\voiceService.js;js-src\build.mjs" Outputs="wwwroot\js\app.js">
+    <Exec Command="npm install --silent" WorkingDirectory="js-src" />
+    <Exec Command="node build.mjs" WorkingDirectory="js-src" />
+  </Target>
+
+  <Target Name="BuildJsPublish" BeforeTargets="BeforePublish">
+    <Exec Command="npm install --silent" WorkingDirectory="js-src" />
+    <Exec Command="node build.mjs" WorkingDirectory="js-src" />
+  </Target>
+
+</Project>
+

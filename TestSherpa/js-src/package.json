@@ -1,0 +1,14 @@
+{
+  "name": "testsherpa-js",
+  "version": "0.14.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

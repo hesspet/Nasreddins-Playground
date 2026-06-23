@@ -1,0 +1,239 @@
+﻿@page "/"
+@using System.Globalization
+@using TestVosk.Models
+@using TestVosk.Services
+@inject IVoiceService VoiceService
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<PageTitle>Hase Kartentest</PageTitle>
+
+<div class="voice-controls">
+    <div class="status-box">
+        <div class="status-label">Status</div>
+        <div class="status-value @GetStatusClass()">@GetStatusText()</div>
+    </div>
+
+    <div class="button-group">
+        @if (VoiceService.State == VoiceState.Listening)
+        {
+            <button class="btn-danger" @onclick="StopListening">
+                Mikrofon stoppen
+            </button>
+        }
+        else
+        {
+            <button class="btn-primary" @onclick="StartListening"
+                    disabled="@(VoiceService.State == VoiceState.LoadingModel)">
+                @(VoiceService.State == VoiceState.LoadingModel ? "Lade Modell ..." : "Mikrofon starten")
+            </button>
+        }
+    </div>
+
+    @if (VoiceService.State == VoiceState.Error)
+    {
+        <div class="error-box">
+            <strong>Fehler:</strong> Mikrofon oder Modell konnte nicht geladen werden.<br />
+            Bitte erlauben Sie die Mikrofonberechtigung und laden Sie die Seite neu.
+        </div>
+    }
+</div>
+
+<section class="test-guide" aria-labelledby="test-guide-title">
+    <h3 id="test-guide-title">Testanleitung</h3>
+    <p>
+        Mikrofon starten, einen Satz deutlich sprechen und danach das Final-Ergebnis im Debug-Log mit der erkannten Karte vergleichen.
+    </p>
+
+    <div class="test-guide-grid">
+        <div>
+            <h4>Sätze, die eine Karte erkennen sollen</h4>
+            <ul class="test-phrases">
+                <li>Hase Karte Kreuz zehn</li>
+                <li>Hase suche Karte Kreuz zehn</li>
+                <li>Hase finde Karte Pik Dame</li>
+                <li>Hase zeige Karte Herz Ass</li>
+                <li>Hase Karo sieben</li>
+                <li>Hase suche Herz Bube</li>
+            </ul>
+        </div>
+
+        <div>
+            <h4>Kontrollsätze ohne Treffer</h4>
+            <ul class="test-phrases muted-list">
+                <li>Kreuz zehn</li>
+                <li>Ich suche eine Karte</li>
+                <li>Das ist die Herz Dame</li>
+                <li>Hase erzähle etwas</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="audio-diagnostics" aria-labelledby="audio-diagnostics-title">
+    <h3 id="audio-diagnostics-title">Audio-Diagnose</h3>
+    <div class="level-meter" aria-label="Mikrofonpegel">
+        <div class="level-meter-fill" style="width: @AudioLevelWidth"></div>
+    </div>
+    <dl>
+        <div>
+            <dt>AudioContext</dt>
+            <dd>@_audioState</dd>
+        </div>
+        <div>
+            <dt>Audioframes</dt>
+            <dd>@_audioChunks</dd>
+        </div>
+        <div>
+            <dt>RMS</dt>
+            <dd>@_rms.ToString("0.0000", CultureInfo.InvariantCulture)</dd>
+        </div>
+        <div>
+            <dt>Peak</dt>
+            <dd>@_peak.ToString("0.0000", CultureInfo.InvariantCulture)</dd>
+        </div>
+    </dl>
+    <p>Wenn beim Sprechen RMS/Peak nahe 0 bleiben oder die Audioframes nicht steigen, kommt kein verwertbares Audiosignal im Browser an.</p>
+</section>
+
+<div class="results-panel">
+    <h3>Erkannte Karte</h3>
+    <div class="card-display">
+        @if (_lastCard is not null)
+        {
+            <span class="card-text">@_lastCard.Suit @_lastCard.Rank</span>
+        }
+        else
+        {
+            <span class="card-text muted">—</span>
+        }
+    </div>
+</div>
+
+<div class="debug-panel">
+    <h3>Debug-Log</h3>
+    <div class="log-container">
+        @foreach (var entry in _log)
+        {
+            <div class="log-entry @entry.CssClass">
+                <span class="log-label">@entry.Kind:</span>
+                <span class="log-text">@entry.Text</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<LogEntry> _log = new();
+    private CardCommand? _lastCard;
+    private double _rms;
+    private double _peak;
+    private long _audioChunks;
+    private string _audioState = "-";
+    private string AudioLevelWidth => $"{Math.Clamp(_peak * 300, 0, 100).ToString("0.#", CultureInfo.InvariantCulture)}%";
+
+    protected override void OnInitialized()
+    {
+        VoiceService.OnPartialResult += OnPartial;
+        VoiceService.OnFinalResult += OnFinal;
+        VoiceService.OnDiagnostic += OnDiagnostic;
+        VoiceService.OnAudioLevel += OnAudioLevel;
+        VoiceService.OnStateChanged += OnStateChange;
+    }
+
+    private void OnPartial(string text)
+    {
+        AddLog("Partial", text);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnFinal(string text)
+    {
+        AddLog("Final", text);
+        var card = CommandParser.Parse(text);
+        if (card != null)
+            _lastCard = card;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnDiagnostic(string message)
+    {
+        AddLog("Diag", message);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnAudioLevel(double rms, double peak, long chunks, string audioState)
+    {
+        _rms = rms;
+        _peak = peak;
+        _audioChunks = chunks;
+        _audioState = audioState;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnStateChange(VoiceState state)
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task StartListening()
+    {
+        _log.Clear();
+        _lastCard = null;
+        _rms = 0;
+        _peak = 0;
+        _audioChunks = 0;
+        _audioState = "-";
+        var baseUrl = Navigation.BaseUri.TrimEnd('/');
+        var modelUrl = $"{baseUrl}/models/model.tar.gz";
+        await VoiceService.StartListeningAsync(modelUrl);
+    }
+
+    private async Task StopListening()
+    {
+        await VoiceService.StopListeningAsync();
+    }
+
+    private string GetStatusText() => VoiceService.State switch
+    {
+        VoiceState.Idle => "Bereit",
+        VoiceState.LoadingModel => "Lade Spracherkennungsmodell ...",
+        VoiceState.Ready => "Modell geladen – bereit",
+        VoiceState.Listening => "Höre zu ...",
+        VoiceState.Error => "Fehler",
+        _ => "Unbekannt"
+    };
+
+    private string GetStatusClass() => VoiceService.State switch
+    {
+        VoiceState.Idle => "status-idle",
+        VoiceState.LoadingModel => "status-loading",
+        VoiceState.Ready => "status-ready",
+        VoiceState.Listening => "status-listening",
+        VoiceState.Error => "status-error",
+        _ => ""
+    };
+
+    public void Dispose()
+    {
+        VoiceService.OnPartialResult -= OnPartial;
+        VoiceService.OnFinalResult -= OnFinal;
+        VoiceService.OnDiagnostic -= OnDiagnostic;
+        VoiceService.OnAudioLevel -= OnAudioLevel;
+        VoiceService.OnStateChanged -= OnStateChange;
+    }
+
+    private void AddLog(string kind, string text)
+    {
+        _log.Add(new LogEntry { Kind = kind, Text = text });
+        if (_log.Count > 80)
+            _log.RemoveAt(0);
+    }
+
+    private class LogEntry
+    {
+        public string Text { get; set; } = "";
+        public string Kind { get; set; } = "Diag";
+        public string CssClass => Kind.ToLowerInvariant();
+    }
+}

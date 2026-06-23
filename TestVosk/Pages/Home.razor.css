@@ -1,0 +1,246 @@
+.voice-controls {
+    margin-bottom: 1rem;
+}
+
+.status-box {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.status-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #888;
+    margin-bottom: 0.25rem;
+}
+
+.status-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.status-idle { color: #888; }
+.status-loading { color: #f0c040; }
+.status-ready { color: #4caf50; }
+.status-listening { color: #4fc3f7; }
+.status-error { color: #e94560; }
+
+.button-group {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.error-box {
+    background-color: rgba(233, 69, 96, 0.15);
+    border: 1px solid #e94560;
+    border-radius: 8px;
+    padding: 0.75rem;
+    font-size: 0.85rem;
+    color: #e94560;
+    margin-bottom: 1rem;
+}
+
+.test-guide {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.test-guide h3,
+.test-guide h4 {
+    margin: 0 0 0.5rem 0;
+}
+
+.test-guide h3 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #888;
+}
+
+.test-guide h4 {
+    font-size: 0.9rem;
+    color: #e0e0e0;
+}
+
+.test-guide p {
+    margin: 0 0 1rem 0;
+    color: #b8b8b8;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.test-guide-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.test-phrases {
+    margin: 0;
+    padding-left: 1.2rem;
+    color: #e0e0e0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.test-phrases li::marker {
+    color: #4fc3f7;
+}
+
+.test-phrases.muted-list {
+    color: #aaa;
+}
+
+.test-phrases.muted-list li::marker {
+    color: #888;
+}
+
+.audio-diagnostics {
+    background-color: rgba(79, 195, 247, 0.08);
+    border: 1px solid rgba(79, 195, 247, 0.18);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.audio-diagnostics h3 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #88d8fa;
+    margin: 0 0 0.75rem 0;
+}
+
+.level-meter {
+    height: 0.75rem;
+    overflow: hidden;
+    background-color: rgba(0, 0, 0, 0.35);
+    border-radius: 999px;
+    margin-bottom: 0.75rem;
+}
+
+.level-meter-fill {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, #4caf50, #f0c040, #e94560);
+    border-radius: inherit;
+    transition: width 120ms ease-out;
+}
+
+.audio-diagnostics dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin: 0 0 0.75rem 0;
+}
+
+.audio-diagnostics dl > div {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 0.5rem;
+}
+
+.audio-diagnostics dt {
+    color: #888;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.audio-diagnostics dd {
+    margin: 0.2rem 0 0 0;
+    color: #e0e0e0;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+}
+
+.audio-diagnostics p {
+    margin: 0;
+    color: #b8b8b8;
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+.results-panel {
+    margin-bottom: 1rem;
+}
+
+.results-panel h3 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #888;
+    margin: 0 0 0.5rem 0;
+}
+
+.card-display {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+}
+
+.card-text {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #e0e0e0;
+}
+
+.card-text.muted {
+    color: #555;
+}
+
+.debug-panel {
+    margin-bottom: 1rem;
+}
+
+.debug-panel h3 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #888;
+    margin: 0 0 0.5rem 0;
+}
+
+.log-container {
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+}
+
+.log-entry {
+    padding: 0.15rem 0;
+}
+
+.log-entry.partial {
+    color: #888;
+}
+
+.log-entry.final {
+    color: #4fc3f7;
+}
+
+.log-entry.diag {
+    color: #f0c040;
+}
+
+.log-label {
+    opacity: 0.7;
+    margin-right: 0.25rem;
+}
+
+.log-text {
+    word-break: break-all;
+}

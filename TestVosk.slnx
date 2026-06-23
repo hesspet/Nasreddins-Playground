@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TestVosk.Tests/TestVosk.Tests.csproj" />
+  <Project Path="TestVosk/TestVosk.csproj" />
+</Solution>
