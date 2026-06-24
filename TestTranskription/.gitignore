@@ -1,0 +1,13 @@
+# Optional local speech model assets
+wwwroot/models/
+
+# Node.js
+js-src/node_modules/
+
+# .NET build artifacts
+bin/
+obj/
+
+# IDE
+.vs/
+*.csproj.user

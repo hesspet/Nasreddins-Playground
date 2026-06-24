@@ -16,7 +16,9 @@ let speechDetected = false;
 let acceptWaveformErrorCount = 0;
 
 const expectedSampleRate = 16000;
-const sherpaModule = window.Module = window.Module || {};
+const sherpaAssetVersion = '0.17.0-whisper-tiny-de-v1';
+const sherpaModule = window.sherpaModule = window.sherpaModule || {};
+let lastRunDependencyCount = 0;
 let runtimeReadyResolve;
 let runtimeReadyReject;
 const runtimeReady = new Promise((resolve, reject) => {
@@ -24,14 +26,30 @@ const runtimeReady = new Promise((resolve, reject) => {
     runtimeReadyReject = reject;
 });
 
-sherpaModule.locateFile = (path, scriptDirectory = '') => scriptDirectory + path;
+sherpaModule.locateFile = (path, scriptDirectory = '') => {
+    if (scriptDirectory) return scriptDirectory + path;
+
+    const url = new URL(`js/${path}`, document.baseURI);
+    if (path.startsWith('sherpa-onnx-wasm-main-vad-asr.')) {
+        url.searchParams.set('v', sherpaAssetVersion);
+    }
+
+    return url.toString();
+};
 sherpaModule.setStatus = (status) => {
     if (status) reportDiagnostic(`Sherpa Runtime: ${status}`);
 };
+sherpaModule.print = (message) => console.log('[Sherpa stdout]', message);
+sherpaModule.printErr = (message) => {
+    console.warn('[Sherpa stderr]', message);
+    if (message) reportDiagnostic(`Sherpa stderr: ${message}`);
+};
+sherpaModule.monitorRunDependencies = (count) => {
+    lastRunDependencyCount = count;
+    reportDiagnostic(`Sherpa RunDependencies: ${count}`);
+};
 sherpaModule.onRuntimeInitialized = () => {
     try {
-        vad = createVad(sherpaModule);
-        sampleBuffer = new CircularBuffer(30 * expectedSampleRate, sherpaModule);
         recognizer = createOfflineRecognizer();
         reportDiagnostic('Sherpa-ONNX VAD+ASR Runtime initialisiert');
         runtimeReadyResolve();
@@ -42,6 +60,26 @@ sherpaModule.onRuntimeInitialized = () => {
 sherpaModule.onAbort = (message) => {
     runtimeReadyReject(new Error(message || 'Sherpa-ONNX Runtime abgebrochen'));
 };
+
+loadSherpaRuntime();
+
+async function loadSherpaRuntime() {
+    const runtimeUrl = new URL(`js/sherpa-onnx-wasm-main-vad-asr.js?v=${sherpaAssetVersion}`, document.baseURI).toString();
+
+    try {
+        reportDiagnostic(`Sherpa Runtime-Umgebung: crossOriginIsolated=${window.crossOriginIsolated}, SharedArrayBuffer=${typeof SharedArrayBuffer}`);
+        const response = await fetch(runtimeUrl, { cache: 'no-cache' });
+        if (!response.ok) {
+            throw new Error(`Sherpa-ONNX Runtime konnte nicht geladen werden: ${response.status} ${response.statusText}`);
+        }
+
+        const source = await response.text();
+        sherpaModule.mainScriptUrlOrBlob = runtimeUrl;
+        Function('Module', `${source}\n//# sourceURL=${runtimeUrl}`)(sherpaModule);
+    } catch (err) {
+        runtimeReadyReject(err);
+    }
+}
 
 function isActiveSession(sessionId) {
     return dotNetRef && sessionId === activeSessionId;
@@ -90,17 +128,19 @@ function createOfflineRecognizer() {
         },
     };
 
-    if (fileExists('dolphin.onnx')) {
+    if (fileExists('whisper-encoder.onnx')) {
+        config.modelConfig.whisper = {
+            encoder: './whisper-encoder.onnx',
+            decoder: './whisper-decoder.onnx',
+            language: 'de',
+            task: 'transcribe',
+        };
+    } else if (fileExists('dolphin.onnx')) {
         config.modelConfig.dolphin = { model: './dolphin.onnx' };
     } else if (fileExists('sense-voice.onnx')) {
         config.modelConfig.senseVoice = {
             model: './sense-voice.onnx',
             useInverseTextNormalization: 1,
-        };
-    } else if (fileExists('whisper-encoder.onnx')) {
-        config.modelConfig.whisper = {
-            encoder: './whisper-encoder.onnx',
-            decoder: './whisper-decoder.onnx',
         };
     } else if (fileExists('zipformer-ctc.onnx')) {
         config.modelConfig.zipformerCtc = { model: './zipformer-ctc.onnx' };
@@ -156,8 +196,12 @@ async function waitForRuntime(sessionId) {
         throw new Error('Sherpa-ONNX VAD+ASR JavaScript-Dateien fehlen. Fuehre Tools/Install-SherpaAssets.ps1 aus.');
     }
 
+    if (window.Module === sherpaModule) {
+        throw new Error('Sherpa-ONNX Runtime kollidiert mit window.Module. Die Seite muss mit der isolierten Sherpa-Bridge neu geladen werden.');
+    }
+
     const timeout = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Sherpa-ONNX Runtime wurde nicht rechtzeitig initialisiert. Pruefe sherpa-onnx-wasm-main-vad-asr.js/.wasm/.data.')), 60000);
+        setTimeout(() => reject(new Error(`Sherpa-ONNX Runtime wurde nicht rechtzeitig initialisiert. runDependencies=${lastRunDependencyCount}, calledRun=${Boolean(sherpaModule.calledRun)}, crossOriginIsolated=${window.crossOriginIsolated}, SharedArrayBuffer=${typeof SharedArrayBuffer}.`)), 240000);
     });
 
     reportDiagnostic('Warte auf Sherpa-ONNX VAD+ASR Runtime ...', sessionId);
@@ -295,10 +339,18 @@ function stopMicrophone() {
     }
 }
 
-function resetSessionState() {
-    stopMicrophone();
-    if (vad) vad.reset();
-    if (sampleBuffer) sampleBuffer.reset();
+function releaseVadState() {
+    if (vad) {
+        try { vad.free(); } catch (err) { console.warn('[Sherpa] VAD free failed:', err); }
+        vad = null;
+    }
+    if (sampleBuffer) {
+        try { sampleBuffer.free(); } catch (err) { console.warn('[Sherpa] sample buffer free failed:', err); }
+        sampleBuffer = null;
+    }
+}
+
+function resetCounters() {
     audioChunkCount = 0;
     lastLevelReport = 0;
     listeningStartedAt = 0;
@@ -307,18 +359,32 @@ function resetSessionState() {
     acceptWaveformErrorCount = 0;
 }
 
+function resetSessionState() {
+    stopMicrophone();
+    releaseVadState();
+    resetCounters();
+}
+
+function createVadState() {
+    releaseVadState();
+    vad = createVad(sherpaModule);
+    sampleBuffer = new CircularBuffer(30 * expectedSampleRate, sherpaModule);
+}
+
 window.voiceService = {
     async startListening(ref, modelUrl, sessionId) {
         dotNetRef = ref;
         activeSessionId = sessionId;
-        resetSessionState();
-        activeSessionId = sessionId;
-        listeningStartedAt = performance.now();
-        lastVoiceAt = listeningStartedAt;
 
         try {
             await waitForRuntime(sessionId);
             if (!isActiveSession(sessionId)) return;
+
+            resetSessionState();
+            activeSessionId = sessionId;
+            createVadState();
+            listeningStartedAt = performance.now();
+            lastVoiceAt = listeningStartedAt;
 
             reportDiagnostic(`Sherpa-Assets bereit: ${modelUrl || 'Runtime-Datenpaket'}`, sessionId);
             invokeIfActive('OnReadyCallback', sessionId);
@@ -384,14 +450,7 @@ window.voiceService = {
             try { recognizer.free(); } catch { }
             recognizer = null;
         }
-        if (vad) {
-            try { vad.free(); } catch { }
-            vad = null;
-        }
-        if (sampleBuffer) {
-            try { sampleBuffer.free(); } catch { }
-            sampleBuffer = null;
-        }
+        releaseVadState();
         dotNetRef = null;
     },
 };

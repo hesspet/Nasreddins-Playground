@@ -29,7 +29,7 @@ TestSherpa/
 |-- TestSherpa.csproj                 Blazor WASM PWA, fuehrt JS-Build vor .NET-Build aus
 |-- Program.cs                        DI-Registrierung fuer IVoiceService
 |-- Pages/Home.razor                  Hauptseite: Status, Testanleitung, Audio-Diagnose, Karte, Debug-Log
-|-- Layout/MainLayout.razor           App-Rahmen, sichtbare Version v0.10.0
+|-- Layout/MainLayout.razor           App-Rahmen, sichtbare Version v0.17.0
 |-- Models/                           Parser- und Sprachstatusmodelle
 |-- Services/                         Parser und C#-JS-Interop-Wrapper
 |-- js-src/voiceService.js            Sherpa-ONNX, Mikrofon, Audio-Pipeline, Diagnose, Callbacks
@@ -48,7 +48,7 @@ TestSherpa.Tests/
 
 ## Sherpa-ONNX-Asset-Setup
 
-Die App nutzt das offizielle mehrsprachige Browserpaket `vad-asr-multi_lang-dolphin_ctc` aus den Sherpa-ONNX-Releases. Es enthaelt Runtime und Modell in einem `.data`-Paket:
+Die App nutzt die offizielle Sherpa-ONNX VAD+ASR Browser-Runtime und erzeugt daraus ein deutschfaehiges Whisper-Tiny-Datenpaket. `Tools/Install-SherpaAssets.ps1` kombiniert die VAD+ASR-WASM-Runtime mit dem offiziellen multilingualen Whisper-Tiny-Modell:
 
 ```text
 wwwroot/js/sherpa-onnx-asr.js

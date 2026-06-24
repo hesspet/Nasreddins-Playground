@@ -1,0 +1,338 @@
+﻿@page "/"
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<PageTitle>Transkriptions-Test</PageTitle>
+
+<section class="hero-card">
+    <div class="eyebrow">Client-only PWA Prototyp</div>
+    <h1>Sprachtest fur kurze Zauber- und Kartensatze</h1>
+    <p class="lead-text">
+        Starte eine kurze Aufnahme, sprich einen Satz und stoppe danach wieder. Die App nutzt die browserseitige
+        Web Speech API per JS-Interop und sendet selbst keine Audiodaten an ein eigenes Backend.
+    </p>
+</section>
+
+<section class="control-card" aria-label="Transkriptionssteuerung">
+    <div class="field-group">
+        <label for="language">Erfassungssprache</label>
+        <select id="language" class="language-select" @bind="_selectedLanguage" disabled="@(_isTranscribing || _isBusy)">
+            @foreach (var language in Languages)
+            {
+                <option value="@language.Code">@language.Label</option>
+            }
+        </select>
+        <span class="hint">Kein Mischbetrieb: pro Aufnahme ist genau eine Sprache aktiv.</span>
+    </div>
+
+    <div class="meter-panel">
+        <div class="meter-header">
+            <span>Mikrofonpegel</span>
+            <strong>@LevelPercent</strong>
+        </div>
+        <div class="level-track" role="meter" aria-label="Mikrofonpegel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@LevelValue">
+            <div class="level-fill" style="width:@LevelPercent"></div>
+        </div>
+    </div>
+
+    <button class="@RecordButtonClass" @onclick="ToggleTranscriptionAsync" disabled="@_isBusy">
+        <span class="record-dot"></span>
+        @(_isTranscribing ? "Stop" : "Start") Transkription
+    </button>
+
+    <button class="secondary-button" @onclick="ClearTranscript" disabled="@(_isTranscribing || (!TranscriptEntries.Any() && string.IsNullOrWhiteSpace(_interimTranscript)))">
+        Transkript leeren
+    </button>
+
+    <div class="status-line" role="status">@_statusText</div>
+</section>
+
+<section class="guide-card">
+    <h2>Fuhrungstext</h2>
+    <p>
+        Teste kurze Satze unter zwei Sekunden, zum Beispiel: "Die Herz Dame liegt oben", "Nimm die Kreuz Sieben"
+        oder "Show me the ace of spades". Sprich deutlich, halte das Telefon nah genug und wechsle die Sprache nur
+        vor dem Start einer neuen Aufnahme.
+    </p>
+    <p class="offline-note">
+        Offline-Hinweis: Die PWA-App-Shell kann nach Installation offline starten. Die SpeechRecognition-Engine ist
+        jedoch browser- und plattformabhangig und in der Praxis meist nicht garantiert offline verfugbar.
+    </p>
+</section>
+
+<section class="transcript-card" aria-label="Transkripte">
+    <div class="transcript-heading">
+        <h2>Transkript</h2>
+        <span>@TranscriptEntries.Count final</span>
+    </div>
+
+    @if (!TranscriptEntries.Any() && string.IsNullOrWhiteSpace(_interimTranscript))
+    {
+        <p class="empty-state">Noch kein Text erkannt.</p>
+    }
+    else
+    {
+        <ol class="transcript-list">
+            @foreach (var entry in TranscriptEntries)
+            {
+                <li>
+                    <time>@entry.Time.ToLocalTime().ToString("HH:mm:ss")</time>
+                    <span>@entry.Text</span>
+                    <small>@entry.Language</small>
+                </li>
+            }
+        </ol>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_interimTranscript))
+    {
+        <div class="interim-transcript">
+            <strong>Zwischenergebnis</strong>
+            <span>@_interimTranscript</span>
+        </div>
+    }
+</section>
+
+<section class="capability-card">
+    <h2>Browserstatus</h2>
+    <dl>
+        <div>
+            <dt>SpeechRecognition</dt>
+            <dd>@FormatSupport(_capabilities?.SpeechSupported)</dd>
+        </div>
+        <div>
+            <dt>Mikrofon API</dt>
+            <dd>@FormatSupport(_capabilities?.MediaSupported)</dd>
+        </div>
+        <div>
+            <dt>AudioContext</dt>
+            <dd>@FormatSupport(_capabilities?.AudioSupported)</dd>
+        </div>
+        <div>
+            <dt>Sicherer Kontext</dt>
+            <dd>@FormatSupport(_capabilities?.IsSecureContext)</dd>
+        </div>
+    </dl>
+</section>
+
+@code {
+    private static readonly LanguageOption[] Languages =
+    [
+        new("de-DE", "Deutsch"),
+        new("en-US", "English")
+    ];
+
+    private readonly List<TranscriptEntry> TranscriptEntries = [];
+    private DotNetObjectReference<Home>? _dotNetReference;
+    private IJSObjectReference? _speechModule;
+    private SpeechCapabilities? _capabilities;
+    private string _selectedLanguage = "de-DE";
+    private string _activeLanguage = "de-DE";
+    private string _statusText = "Bereit. Bitte Browserberechtigungen fur Mikrofon erlauben.";
+    private string _interimTranscript = string.Empty;
+    private bool _isBusy;
+    private bool _isTranscribing;
+    private double _level;
+
+    private int LevelValue => (int)Math.Round(Math.Clamp(_level, 0, 1) * 100);
+
+    private string LevelPercent => $"{LevelValue}%";
+
+    private string RecordButtonClass => _isTranscribing ? "record-button is-active" : "record-button";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            _speechModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/speechInterop.js");
+            _dotNetReference = DotNetObjectReference.Create(this);
+            await _speechModule.InvokeVoidAsync("initialize", _dotNetReference);
+            _capabilities = await _speechModule.InvokeAsync<SpeechCapabilities>("getCapabilities");
+            _statusText = _capabilities.SpeechSupported && _capabilities.MediaSupported && _capabilities.AudioSupported
+                ? "Bereit. Tippe Start und sprich einen kurzen Satz."
+                : "Dieser Browser unterstutzt SpeechRecognition oder Mikrofonzugriff nicht vollstandig.";
+        }
+        catch (JSException ex)
+        {
+            _statusText = $"Initialisierung fehlgeschlagen: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task ToggleTranscriptionAsync()
+    {
+        if (_isTranscribing)
+        {
+            await StopTranscriptionAsync();
+            return;
+        }
+
+        await StartTranscriptionAsync();
+    }
+
+    private async Task StartTranscriptionAsync()
+    {
+        if (_speechModule is null)
+        {
+            _statusText = "Speech-Modul ist noch nicht geladen.";
+            return;
+        }
+
+        _isBusy = true;
+        _interimTranscript = string.Empty;
+        _statusText = "Starte Mikrofon und Spracherkennung...";
+        _activeLanguage = _selectedLanguage;
+
+        try
+        {
+            await _speechModule.InvokeVoidAsync("start", _activeLanguage);
+            _isTranscribing = true;
+        }
+        catch (JSException ex)
+        {
+            _statusText = $"Start fehlgeschlagen: {ex.Message}";
+            _isTranscribing = false;
+            _level = 0;
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task StopTranscriptionAsync()
+    {
+        if (_speechModule is null)
+        {
+            return;
+        }
+
+        _isBusy = true;
+
+        try
+        {
+            await _speechModule.InvokeVoidAsync("stop");
+            _statusText = "Gestoppt.";
+        }
+        catch (JSException ex)
+        {
+            _statusText = $"Stop fehlgeschlagen: {ex.Message}";
+        }
+        finally
+        {
+            _isTranscribing = false;
+            _isBusy = false;
+            _level = 0;
+        }
+    }
+
+    private void ClearTranscript()
+    {
+        TranscriptEntries.Clear();
+        _interimTranscript = string.Empty;
+        _statusText = "Transkript geleert.";
+    }
+
+    [JSInvokable]
+    public Task HandleTranscript(string text, bool isFinal)
+    {
+        return InvokeAsync(() =>
+        {
+            var normalizedText = text.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedText))
+            {
+                return;
+            }
+
+            if (isFinal)
+            {
+                TranscriptEntries.Add(new TranscriptEntry(DateTimeOffset.Now, normalizedText, _activeLanguage));
+                _interimTranscript = string.Empty;
+            }
+            else
+            {
+                _interimTranscript = normalizedText;
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    [JSInvokable]
+    public Task HandleLevel(double level)
+    {
+        return InvokeAsync(() =>
+        {
+            _level = Math.Clamp(level, 0, 1);
+            StateHasChanged();
+        });
+    }
+
+    [JSInvokable]
+    public Task HandleStatus(string message, bool active)
+    {
+        return InvokeAsync(() =>
+        {
+            _statusText = message;
+            _isTranscribing = active;
+            StateHasChanged();
+        });
+    }
+
+    [JSInvokable]
+    public Task HandleError(string message)
+    {
+        return InvokeAsync(() =>
+        {
+            _statusText = message;
+            StateHasChanged();
+        });
+    }
+
+    private static string FormatSupport(bool? value) => value switch
+    {
+        true => "verfugbar",
+        false => "nicht verfugbar",
+        null => "prufe..."
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_speechModule is not null)
+        {
+            try
+            {
+                await _speechModule.InvokeVoidAsync("dispose");
+                await _speechModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+
+        _dotNetReference?.Dispose();
+    }
+
+    private sealed record LanguageOption(string Code, string Label);
+
+    private sealed record TranscriptEntry(DateTimeOffset Time, string Text, string Language);
+
+    private sealed class SpeechCapabilities
+    {
+        public bool SpeechSupported { get; set; }
+
+        public bool MediaSupported { get; set; }
+
+        public bool AudioSupported { get; set; }
+
+        public bool IsSecureContext { get; set; }
+
+        public string RecognitionName { get; set; } = string.Empty;
+    }
+}
